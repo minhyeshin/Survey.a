@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>청소년의 사회적 선호도 조사 (A집단)</title>
+<style>
+  :root{
+    --ink:#1c2b3a; --bg:#f6f7f5; --panel:#ffffff; --line:#dfe3e0;
+    --accent:#2f5d50; --accent-soft:#e7efec; --muted:#6b7680;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;font-family:-apple-system,"Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;background:var(--bg);color:var(--ink);line-height:1.6;}
+  .wrap{max-width:640px;margin:0 auto;padding:32px 20px 80px;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:28px 26px;margin-bottom:16px;}
+  .eyebrow{font-size:12px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;margin-bottom:6px;}
+  h1{font-size:22px;margin:0 0 8px;} h2{font-size:17px;margin:0 0 6px;}
+  p{color:#3c4750;font-size:14.5px;}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 16px;}
+  .progress{height:4px;background:var(--line);border-radius:2px;margin-bottom:24px;overflow:hidden;}
+  .progress-fill{height:100%;background:var(--accent);transition:width .3s;}
+  .field{margin-bottom:22px;}
+  label{display:block;font-size:14px;font-weight:600;margin-bottom:8px;}
+  select,textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:6px;font-size:14px;font-family:inherit;background:#fff;}
+  .slider-row{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
+  .slider-name{width:64px;font-size:13.5px;flex-shrink:0;}
+  input[type=range]{flex:1;accent-color:var(--accent);}
+  input[type=range]:disabled{opacity:.25;}
+  input[type=range]:not(.touched)::-webkit-slider-thumb{opacity:0;}
+  input[type=range]:not(.touched)::-moz-range-thumb{opacity:0;}
+  input[type=range]:not(.touched)::-webkit-slider-runnable-track{background:var(--line);}
+  .slider-val{width:30px;text-align:right;font-size:13px;color:var(--muted);}
+  .dontknow{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);width:56px;flex-shrink:0;font-weight:400;}
+  .dontknow input{margin:0;}
+  .rating-item{margin-bottom:12px;}
+  .policy-box{background:#fff;border:1px solid var(--line);padding:14px 16px;border-radius:4px;font-size:14px;margin-bottom:18px;}
+  .target-name{font-weight:800;}
+  .lead-highlight{display:inline-block;background:rgba(47,93,80,.55);color:#fff;padding:4px 10px;border-radius:6px;line-height:1.5;}
+  .btn{background:var(--accent);color:#fff;border:none;border-radius:6px;padding:12px 22px;font-size:14.5px;font-weight:600;cursor:pointer;}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+  .btn-row{display:flex;justify-content:flex-end;margin-top:10px;}
+  .debrief{white-space:pre-line;font-size:14px;color:#2c363f;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="progress"><div class="progress-fill" id="progressFill" style="width:8%"></div></div>
+  <div id="app"></div>
+</div>
+
+<script>
+/* ------------------------------------------------------------
+   이 파일은 A집단(대상 이름 비공개) 전용입니다.
+   디자인(CSS/마크업)은 B집단과 동일하게 맞추고,
+   대상 이름 비공개 로직만 A집단 고유 로직으로 유지합니다.
+------------------------------------------------------------- */
+const FIXED_GROUP = "A";
+
+const DOMAINS = {
+  company: { label: "IT 기업", obj: "기업", items: ["삼성","애플","LG","SK","KT"] },
+  politician: { label: "정치인", obj: "인물", items: ["이재명","이준석","조국"] },
+  celebrity: { label: "유명인", obj: "인물", items: ["아이유","유재석","김연아","김구라"] }
+};
+
+const TARGET_ITEMS = [
+  {
+    domain: "politician", pick: "min", verb: "추진하고 있는",
+    title: "교권 보호국 신설 정책",
+    body: "최근 방영된 드라마 '참교육' 속 교권보호국과 같이 지속적 악성민원 및 학교폭력 등을 방지하기 위해 교육부 산하에 새로은 부서를 설립하고 관련 법·제도를 개선하는 정책입니다."
+  },
+  {
+    domain: "celebrity", pick: "max", verb: "지지 의견을 표명한",
+    title: "청소년 문화·예술 활동 지원 정책",
+    body: "입시 위주의 교육에서 벗어나 청소년들이 주말이나 방과 후에 자율적인 문화·예술·체육 동아리 활동을 마음껏즐길 수 있도록 일정 범위 내에서 지자체가 예산을 지원하는 정책입니다."
+  },
+  {
+    domain: "company", pick: "min", verb: "제안한",
+    title: "스마트기기 지원 정책",
+    body: "정부와 기업이 협력하여 전국 중·고등학생 전원에게 태블릿PC 등 중간 사양의 스마트기기를 무상으로 대여해 주고, 학교는 이를 활용한 AI 및 디지털 수업을 필수화하는 정책입니다."
+  }
+];
+
+/* ------------------------------------------------------------ */
+// crypto.randomUUID()는 file:// 로 직접 열었을 때(보안 컨텍스트가 아님) 동작하지 않아
+// 전체 스크립트가 멈추는 원인이 되므로, 의존하지 않는 방식으로 참여 코드를 생성합니다.
+function generateCode(){
+  return Math.random().toString(36).slice(2,10);
+}
+
+let state = {
+  code: generateCode(),
+  ratings: { company:{}, politician:{}, celebrity:{} },
+  group: null,
+  targetNames: {},
+  approvals: [],
+};
+
+const policyOrder = [...TARGET_ITEMS.keys()].sort(()=>Math.random()-0.5);
+let targetIdx = 0;
+
+const STEPS = ["intro","rating_company","rating_politician","rating_celebrity","target","submit","debrief"];
+let stepIdx = 0;
+
+function render(){
+  document.getElementById("progressFill").style.width = (8 + (stepIdx/(STEPS.length-1))*92) + "%";
+  const app = document.getElementById("app");
+  const step = STEPS[stepIdx];
+  app.innerHTML = "";
+  const card = document.createElement("div");
+  card.className = "card";
+
+  if(step==="intro") card.innerHTML = introHTML();
+  if(step==="rating_company") card.innerHTML = ratingPageHTML("company", 1);
+  if(step==="rating_politician") card.innerHTML = ratingPageHTML("politician", 2);
+  if(step==="rating_celebrity") card.innerHTML = ratingPageHTML("celebrity", 3);
+  if(step==="target") card.innerHTML = targetHTML();
+  if(step==="submit"){ submitResponse(); return; }
+  if(step==="debrief") card.innerHTML = debriefHTML();
+
+  app.appendChild(card);
+  attachHandlers(step);
+}
+
+function nextStep(){
+  stepIdx++;
+  // 그룹은 목표 정책 화면에 처음 진입하기 '전' 동기적으로 확정하므로
+  // 이름이 뒤늦게 나타나는 시간차(깜빡임) 문제가 발생하지 않습니다.
+  if(STEPS[stepIdx] === "target" && !state.group){
+    state.group = FIXED_GROUP; // A집단: 이름 비공개
+  }
+  render();
+}
+
+/* ---------- 한글 조사(이/가) 자동 판별 ---------- */
+function josa(word){
+  if(!word) return "이(가)";
+  if(!/[가-힣]/.test(word)) return "가"; // 영문 약자(LG, SK, KT 등)는 '가'로 표기
+  const code = word.charCodeAt(word.length-1) - 0xAC00;
+  if(code<0 || code>11171) return "이(가)";
+  return (code % 28 !== 0) ? "이" : "가";
+}
+
+/* ---------- 화면 ---------- */
+function introHTML(){
+  return `
+    <div class="eyebrow">참여 안내</div>
+    <h1>청소년의 사회적 선호도 조사</h1>
+    <p>이 설문은 청소년의 다양한 의견과 선호도를 알아보기 위한 조사입니다. 각 질문에 대한 정답은 없으며 응답은 통계 목적으로만 사용됩니다. 익명이 보장되오니, 솔직하게 응답해 주시길 바랍니다.</p>
+    <div class="btn-row"><button class="btn" id="startBtn">시작하기</button></div>
+  `;
+}
+
+function ratingPageHTML(domainKey, qNum){
+  const d = DOMAINS[domainKey];
+  return `
+    <div class="eyebrow">${qNum} / 3</div>
+    <h2>${qNum}. <span class="lead-highlight">슬라이더를 조절해 다음 ${d.label}에 대한 평소 선호도를 0~100 사이의 숫자로 나타내 주세요.</span></h2>
+    <p class="sub">(해당 ${d.obj}을 모르는 경우 슬라이더 옆 '모름'에 체크)</p>
+    ${d.items.map((name,i)=>`
+      <div class="rating-item">
+        <div class="slider-row">
+          <div class="slider-name">${name}</div>
+          <input type="range" min="0" max="100" class="ratingSlider" data-idx="${i}">
+          <div class="slider-val" id="rv-${i}">-</div>
+          <label class="dontknow"><input type="checkbox" class="dontknowBox" data-idx="${i}"> 모름</label>
+        </div>
+      </div>
+    `).join("")}
+    <div class="btn-row"><button class="btn" id="nextBtn" disabled>다음</button></div>
+  `;
+}
+
+function targetHTML(){
+  const item = TARGET_ITEMS[policyOrder[targetIdx]];
+  const lead = "다음은 한 정책안입니다."; // A집단은 항상 이름 비공개
+  const num = targetIdx + 4;
+  return `
+    <div class="eyebrow">정책 ${targetIdx+1} / ${TARGET_ITEMS.length}</div>
+    <h2>${num}. <span class="lead-highlight">${lead}</span></h2>
+    <div class="policy-box">${item.body}</div>
+    <label>슬라이더를 조절해 해당 정책안에 대한 찬성도를 0~100 사이의 숫자로 나타내 주세요.</label>
+    <div class="slider-row">
+      <input type="range" min="0" max="100" id="approvalSlider">
+      <div class="slider-val" id="approvalVal">-</div>
+    </div>
+    <div class="btn-row"><button class="btn" id="nextBtn" disabled>${targetIdx < TARGET_ITEMS.length-1 ? "다음 정책" : "다음"}</button></div>
+  `;
+}
+
+function debriefHTML(){
+  return `
+    <div class="eyebrow">참여해주셔서 감사합니다</div>
+    <h1>안내 사항</h1>
+    <div class="debrief">이 조사의 실제 목적은 '정치인에 대한 평소 감정이 정책에 대한 찬반 판단에 영향을 미치는가'를 확인하는 실험이었습니다.
+
+앞서 제시된 정책과 특정 정치인, 기업, 연예인의 연결은 실험을 위해 가상으로 구성한 것으로, 실제 해당 인물 및 기업의 입장과는 완전히 무관합니다.
+
+응답은 연구 목적으로만 이용됩니다. 자료 활용을 원하지 않으실 경우 참여 코드(${state.code})를 알려주시면 삭제해드립니다.
+
+참여해주셔서 감사합니다.</div>
+  `;
+}
+
+/* ---------- 이벤트 ---------- */
+function attachHandlers(step){
+  const nextBtn = document.getElementById("nextBtn");
+  const startBtn = document.getElementById("startBtn");
+  if(startBtn) startBtn.onclick = nextStep;
+
+  const ratingStepMap = { rating_company:"company", rating_politician:"politician", rating_celebrity:"celebrity" };
+  if(ratingStepMap[step]){
+    const domainKey = ratingStepMap[step];
+    const items = DOMAINS[domainKey].items;
+    const sliders = [...document.querySelectorAll(".ratingSlider")];
+    const boxes = [...document.querySelectorAll(".dontknowBox")];
+    function checkAllAnswered(){
+      const ok = sliders.every((sl,i)=> boxes[i].checked || sl.classList.contains("touched"));
+      nextBtn.disabled = !ok;
+    }
+    sliders.forEach((sl,i)=>{
+      sl.oninput = ()=>{
+        sl.classList.add("touched");
+        document.getElementById(`rv-${i}`).textContent = sl.value;
+        if(boxes[i].checked){ boxes[i].checked = false; sl.disabled = false; }
+        checkAllAnswered();
+      };
+    });
+    boxes.forEach((box,i)=>{
+      box.onchange = ()=>{
+        const sl = sliders[i];
+        sl.disabled = box.checked;
+        document.getElementById(`rv-${i}`).textContent = box.checked ? "모름" : (sl.classList.contains("touched") ? sl.value : "-");
+        checkAllAnswered();
+      };
+    });
+    nextBtn.onclick = ()=>{
+      items.forEach((name,i)=>{
+        state.ratings[domainKey][name] = boxes[i].checked ? null : +sliders[i].value;
+      });
+      nextStep();
+    };
+  }
+
+  if(step==="target"){
+    const slider = document.getElementById("approvalSlider");
+    slider.oninput = ()=>{
+      slider.classList.add("touched");
+      document.getElementById("approvalVal").textContent = slider.value;
+      nextBtn.disabled = false;
+    };
+    nextBtn.onclick = ()=>{
+      const item = TARGET_ITEMS[policyOrder[targetIdx]];
+      state.approvals.push({
+        title: item.title,
+        domain: item.domain,
+        slider: slider.classList.contains("touched") ? +slider.value : null
+      });
+      targetIdx++;
+      if(targetIdx < TARGET_ITEMS.length){ render(); } else { nextStep(); }
+    };
+  }
+}
+
+/* ---------- 제출 ---------- */
+// 배포 후 생성된 Google Apps Script 웹 앱 URL로 교체하세요.
+// (Apps Script 배포 방법은 함께 드린 apps_script_backend.gs 상단 안내 참고)
+const WEBAPP_URL = "https://script.google.com/macros/s/AKfycbzvAntL8ne4VffEcGx-J8yMT-yqynkaYCM9h66FUjbcbADPpdgCSni992odHe1hUoOp0Q/exec";
+
+async function submitResponse(){
+  try{
+    await fetch(WEBAPP_URL, {
+      method: "POST",
+      mode: "no-cors", // Apps Script는 CORS 응답을 안 주므로 응답을 읽지 않고 전송만 합니다.
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify(state)
+    });
+  }catch(e){ console.error("저장 실패", e); }
+  stepIdx++;
+  render();
+}
+
+render();
+</script>
+</body>
+</html>
